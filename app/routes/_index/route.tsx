@@ -46,9 +46,17 @@ export default withOptimisticContext<RouteData>(
       data.favouriteDogs.length;
 
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 20,
+          alignItems: "flex-start",
+        }}
+      >
         <PersonForm data={data} />
-        <div>Average love: {averageLove}</div>
+        <label>Average love</label>
+        <input readOnly type="range" min={0} max={100} value={averageLove} />
         {isSaving && <div>Something is saving</div>}
       </div>
     );
