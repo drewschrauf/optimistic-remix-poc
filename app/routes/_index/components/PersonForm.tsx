@@ -18,7 +18,7 @@ const DogForm = ({ data }: { data: Dog }) => {
   };
 
   return (
-    <div>
+    <div style={{ border: "1px solid black", padding: 10 }}>
       <h2>Dog {fetcher.state === "submitting" && "(Saving)"}</h2>
       <div>
         <label htmlFor={`${data.id}-name`}>Name</label>
@@ -58,7 +58,7 @@ export default function PersonForm({ data }: { data: RouteData }) {
   const fetcher = useOptimisticFetcher();
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <h1>Person {fetcher.state === "submitting" && "(Saving)"}</h1>
       <div>
         <label htmlFor="name">Name</label>
