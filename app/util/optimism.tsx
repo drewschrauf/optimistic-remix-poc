@@ -1,12 +1,10 @@
 import {
-  FetcherWithComponents,
+  type FetcherWithComponents,
   useFetcher,
   useLoaderData,
-  useNavigate,
-  useNavigation,
 } from "@remix-run/react";
 import {
-  ComponentType,
+  type ComponentType,
   createContext,
   useContext,
   useRef,
@@ -56,7 +54,7 @@ const clone = <T,>(data: T): T => JSON.parse(JSON.stringify(data));
 
 export const withOptimisticContext = <Data = unknown,>(
   Comp: ComponentType,
-  update: (data: LoaderData<Data>, action: unknown) => void
+  update: (data: LoaderData<Data>, action: FetcherTarget) => void
 ) => {
   const inFlightUpdates = new Map<Symbol, Update>();
   const pendingUpdates = new Map<Symbol, Update>();

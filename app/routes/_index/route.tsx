@@ -16,18 +16,12 @@ export const loader: LoaderFunction = async () => {
 export const action: ActionFunction = async ({ request }) => {
   await delay(2000);
 
-  const form = await request.formData();
-  const data: any = {};
-  for (const [key, value] of form) {
-    data[key] = value;
-  }
-
+  const data = await request.json();
   const action = actionSchema.parse(data);
 
   if (action.type === "updatePerson") {
     await updatePerson(action);
-  }
-  if (action.type === "updateDog") {
+  } else if (action.type === "updateDog") {
     await updateDog(action);
   }
 
@@ -63,11 +57,10 @@ export default withOptimisticContext<RouteData>(
   },
   (data, rawAction) => {
     const action = actionSchema.parse(rawAction);
+
     if (action.type === "updatePerson") {
       data.name = action.name;
-    }
-
-    if (action.type === "updateDog") {
+    } else if (action.type === "updateDog") {
       const dog = data.favouriteDogs.find((d) => d.id === action.id)!;
       dog.name = action.name;
       dog.age = action.age;

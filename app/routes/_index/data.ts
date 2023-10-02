@@ -1,3 +1,5 @@
+import { type ActionByType } from "./actions";
+
 export type RouteData = {
   name: string;
   favouriteDogs: {
@@ -20,7 +22,7 @@ const dogData: {
   "def-456": { name: "Noodle", age: 4, lovePercent: 95 },
 };
 
-export const updatePerson = async ({ name }: { name: string }) => {
+export const updatePerson = async ({ name }: ActionByType<"updatePerson">) => {
   personData.name = name;
 };
 
@@ -29,12 +31,7 @@ export const updateDog = async ({
   name,
   age,
   lovePercent,
-}: {
-  id: string;
-  name: string;
-  age: number;
-  lovePercent: number;
-}) => {
+}: ActionByType<"updateDog">) => {
   const dog = dogData[id];
   dog.name = name;
   dog.age = age;
