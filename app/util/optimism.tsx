@@ -13,13 +13,14 @@ import {
 } from "react";
 
 type LoaderData<T> = ReturnType<typeof useLoaderData<T>>;
-type FetcherTarget = FetcherWithComponents<unknown>["submit"] extends (
+type Fetcher = FetcherWithComponents<unknown>;
+type FetcherTarget = Fetcher["submit"] extends (
   target: infer U,
   options: any
 ) => any
   ? U
   : never;
-type FetcherSubmitOptions = FetcherWithComponents<unknown>["submit"] extends (
+type FetcherSubmitOptions = Fetcher["submit"] extends (
   target: any,
   options: infer U
 ) => any
@@ -30,10 +31,11 @@ type ContextType = {
   optimisticLoaderData: unknown;
   onSubmit: (
     fetcherId: Symbol,
+    fetcher: Fetcher,
     data: FetcherTarget,
     options: FetcherSubmitOptions
   ) => void;
-  onComplete: (fetcherId: Symbol) => Update | null;
+  onComplete: (fetcherId: Symbol, fetcher: Fetcher) => void;
 };
 
 type Update = {
@@ -65,6 +67,12 @@ export const withOptimisticContext = <Data = unknown,>(
       useState(loaderData);
 
     const recalculateOptimisticLoaderData = () => {
+      console.debug(
+        "Recalculating: %d in-flight, %d pending",
+        inFlightUpdates.size,
+        pendingUpdates.size
+      );
+
       const data = clone(loaderData);
 
       for (const [, { action }] of [
@@ -78,33 +86,39 @@ export const withOptimisticContext = <Data = unknown,>(
     };
 
     useEffect(() => {
+      console.log("effect");
       recalculateOptimisticLoaderData();
     }, [loaderData]);
 
-    const onSubmit: ContextType["onSubmit"] = (fetcherId, action, options) => {
+    const onSubmit: ContextType["onSubmit"] = (
+      fetcherId,
+      fetcher,
+      action,
+      options
+    ) => {
       if (inFlightUpdates.has(fetcherId)) {
         pendingUpdates.delete(fetcherId);
         pendingUpdates.set(fetcherId, { action, options });
       } else {
+        fetcher.submit(action, options);
         inFlightUpdates.set(fetcherId, { action, options });
       }
 
       recalculateOptimisticLoaderData();
     };
 
-    const onComplete: ContextType["onComplete"] = (fetcherId) => {
-      const deleted = inFlightUpdates.delete(fetcherId);
+    const onComplete: ContextType["onComplete"] = (fetcherId, fetcher) => {
+      inFlightUpdates.delete(fetcherId);
       const next = pendingUpdates.get(fetcherId) ?? null;
 
       if (next) {
         pendingUpdates.delete(fetcherId);
+        fetcher.submit(next.action, next.options);
+        inFlightUpdates.set(fetcherId, {
+          action: next.action,
+          options: next.options,
+        });
       }
-
-      if (deleted) {
-        recalculateOptimisticLoaderData();
-      }
-
-      return next;
     };
 
     return (
@@ -129,26 +143,20 @@ export const useOptimisticLoaderData = <T,>(): ReturnType<
   return context.optimisticLoaderData as ReturnType<typeof useLoaderData<T>>;
 };
 
-export const useOptimisticFetcher = (): FetcherWithComponents<unknown> => {
+export const useOptimisticFetcher = (): Fetcher => {
   const context = useOptimisticContext();
   const fetcher = useFetcher();
   const fetcherId = useRef(Symbol());
 
-  const submit: typeof fetcher.submit = (target, options) => {
-    if (fetcher.state === "idle") {
-      fetcher.submit(target, options);
-    }
-    context.onSubmit(fetcherId.current, target, options);
+  const submit: Fetcher["submit"] = (target, options) => {
+    context.onSubmit(fetcherId.current, fetcher, target, options);
   };
 
   useEffect(() => {
     if (fetcher.state === "idle") {
-      const next = context.onComplete(fetcherId.current);
-      if (next) {
-        submit(next.action, next.options);
-      }
+      context.onComplete(fetcherId.current, fetcher);
     }
-  }, [context, fetcher.state, submit]);
+  }, [context, fetcher, submit]);
 
   return {
     ...fetcher,
