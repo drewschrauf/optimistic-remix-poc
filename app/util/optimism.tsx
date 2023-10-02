@@ -10,6 +10,7 @@ import {
   useRef,
   useEffect,
   useState,
+  useCallback,
 } from "react";
 
 type LoaderData<T> = ReturnType<typeof useLoaderData<T>>;
@@ -66,60 +67,63 @@ export const withOptimisticContext = <Data = unknown,>(
     const [optimisticLoaderData, setOptimisticLoaderData] =
       useState(loaderData);
 
-    const recalculateOptimisticLoaderData = () => {
-      console.debug(
-        "Recalculating: %d in-flight, %d pending",
-        inFlightUpdates.size,
-        pendingUpdates.size
-      );
+    const recalculateOptimisticLoaderData = useCallback(
+      (loaderData: LoaderData<Data>) => {
+        console.debug(
+          "Recalculating: %d in-flight, %d pending",
+          inFlightUpdates.size,
+          pendingUpdates.size
+        );
 
-      const data = clone(loaderData);
+        const data = clone(loaderData);
 
-      for (const [, { action }] of [
-        ...inFlightUpdates.entries(),
-        ...pendingUpdates.entries(),
-      ]) {
-        update(data, action);
-      }
+        for (const [, { action }] of [
+          ...inFlightUpdates.entries(),
+          ...pendingUpdates.entries(),
+        ]) {
+          update(data, action);
+        }
 
-      setOptimisticLoaderData(data);
-    };
+        setOptimisticLoaderData(data);
+      },
+      []
+    );
 
     useEffect(() => {
-      console.log("effect");
-      recalculateOptimisticLoaderData();
-    }, [loaderData]);
+      recalculateOptimisticLoaderData(loaderData);
+    }, [loaderData, recalculateOptimisticLoaderData]);
 
-    const onSubmit: ContextType["onSubmit"] = (
-      fetcherId,
-      fetcher,
-      action,
-      options
-    ) => {
-      if (inFlightUpdates.has(fetcherId)) {
-        pendingUpdates.delete(fetcherId);
-        pendingUpdates.set(fetcherId, { action, options });
-      } else {
-        fetcher.submit(action, options);
-        inFlightUpdates.set(fetcherId, { action, options });
-      }
+    const onSubmit: ContextType["onSubmit"] = useCallback(
+      (fetcherId, fetcher, action, options) => {
+        if (inFlightUpdates.has(fetcherId)) {
+          pendingUpdates.delete(fetcherId);
+          pendingUpdates.set(fetcherId, { action, options });
+        } else {
+          fetcher.submit(action, options);
+          inFlightUpdates.set(fetcherId, { action, options });
+        }
 
-      recalculateOptimisticLoaderData();
-    };
+        recalculateOptimisticLoaderData(loaderData);
+      },
+      [loaderData, recalculateOptimisticLoaderData]
+    );
 
-    const onComplete: ContextType["onComplete"] = (fetcherId, fetcher) => {
-      inFlightUpdates.delete(fetcherId);
-      const next = pendingUpdates.get(fetcherId) ?? null;
+    const onComplete: ContextType["onComplete"] = useCallback(
+      (fetcherId, fetcher) => {
+        inFlightUpdates.delete(fetcherId);
+        const next = pendingUpdates.get(fetcherId) ?? null;
 
-      if (next) {
-        pendingUpdates.delete(fetcherId);
-        fetcher.submit(next.action, next.options);
-        inFlightUpdates.set(fetcherId, {
-          action: next.action,
-          options: next.options,
-        });
-      }
-    };
+        if (next) {
+          pendingUpdates.delete(fetcherId);
+          fetcher.submit(next.action, next.options);
+          inFlightUpdates.set(fetcherId, {
+            action: next.action,
+            options: next.options,
+          });
+        }
+      },
+      []
+    );
 
     return (
       <optimisticContext.Provider
@@ -139,24 +143,24 @@ export const withOptimisticContext = <Data = unknown,>(
 export const useOptimisticLoaderData = <T,>(): ReturnType<
   typeof useLoaderData<T>
 > => {
-  const context = useOptimisticContext();
-  return context.optimisticLoaderData as ReturnType<typeof useLoaderData<T>>;
+  const { optimisticLoaderData } = useOptimisticContext();
+  return optimisticLoaderData as ReturnType<typeof useLoaderData<T>>;
 };
 
 export const useOptimisticFetcher = (): Fetcher => {
-  const context = useOptimisticContext();
+  const { onSubmit, onComplete } = useOptimisticContext();
   const fetcher = useFetcher();
   const fetcherId = useRef(Symbol());
 
   const submit: Fetcher["submit"] = (target, options) => {
-    context.onSubmit(fetcherId.current, fetcher, target, options);
+    onSubmit(fetcherId.current, fetcher, target, options);
   };
 
   useEffect(() => {
     if (fetcher.state === "idle") {
-      context.onComplete(fetcherId.current, fetcher);
+      onComplete(fetcherId.current, fetcher);
     }
-  }, [context, fetcher, submit]);
+  }, [onComplete, fetcher]);
 
   return {
     ...fetcher,
